@@ -120,13 +120,16 @@ def compute_metrics(eval_pred):
 ####TRAINING LOOP 1 : LANGUAGE IDENTIFICATION####
 
 model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map["language"])
-training_args = TrainingArguments(evaluation_strategy="epoch", output_dir="./models/singltask_model_{}".format("language"),
+training_args = TrainingArguments(evaluation_strategy="epoch", output_dir="./models/singletask_model_{}".format("language"),
     overwrite_output_dir=True,
     learning_rate=1e-5,
     do_train=True,
-    num_train_epochs=10,
+    num_train_epochs=5,
     per_device_train_batch_size=32,  
-    save_steps=3000)
+    evaluation_strategy =‘steps’,
+    eval_steps = 500, # Evaluation and Save happens every 10 steps
+    save_total_limit = 3, # Only last 5 models are saved. Older ones are deleted.
+    load_best_model_at_end=True)
 trainer = Trainer(
 model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
 trainer.train()
@@ -137,13 +140,16 @@ model = BertForSequenceClassification.from_pretrained("./models/singletask_model
 for name, param in model.named_parameters():
 	if 'classifier' not in name: # classifier layer
 		param.requires_grad = False
-training_args = TrainingArguments(evaluation_strategy="epoch", output_dir="./models/singltask_model_{}".format("emotion"),
+training_args = TrainingArguments(evaluation_strategy="epoch", output_dir="./models/singletask_model_{}".format("emotion"),
     overwrite_output_dir=True,
     learning_rate=1e-5,
     do_train=True,
-    num_train_epochs=10,
+    num_train_epochs=5,
     per_device_train_batch_size=32,  
-    save_steps=3000)
+    evaluation_strategy =‘steps’,
+    eval_steps = 500, # Evaluation and Save happens every 10 steps
+    save_total_limit = 3, # Only last 5 models are saved. Older ones are deleted.
+    load_best_model_at_end=True)
 trainer = Trainer(
 model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
 trainer.train()
