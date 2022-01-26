@@ -6,7 +6,7 @@ import transformers
 import nlp
 import logging
 from datasets import load_dataset
-
+from grad_reversal_bert import RevGradBert
 
 
 logging.basicConfig(level=logging.INFO)
@@ -117,39 +117,45 @@ def compute_metrics(eval_pred):
 
 
 
+#Use RevGradBert() instead of BertForSequenceClassification()
+#For Gradient Reversal training for a particular task
+
 ####TRAINING LOOP 1 : LANGUAGE IDENTIFICATION####
 
-model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map["language"])
-training_args = TrainingArguments(evaluation_strategy="epoch", output_dir="./models/singletask_model_{}".format("language"),
-    overwrite_output_dir=True,
-    learning_rate=1e-5,
-    do_train=True,
-    num_train_epochs=5,
-    per_device_train_batch_size=32,  
-    evaluation_strategy =‘steps’,
-    eval_steps = 500, # Evaluation and Save happens every 10 steps
-    save_total_limit = 3, # Only last 5 models are saved. Older ones are deleted.
-    load_best_model_at_end=True)
-trainer = Trainer(
-model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
-trainer.train()
+# task = "language"
+# model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
+# training_args = TrainingArguments(output_dir="./models/singletask_model_{}".format(task),
+#     overwrite_output_dir=True,
+#     learning_rate=1e-5,
+#     do_train=True,
+#     num_train_epochs=5,
+#     per_device_train_batch_size=32,  
+#     evaluation_strategy = 'steps',
+#     eval_steps = 200, # Evaluation and Save happens every X steps
+#     save_total_limit = 3)
+# trainer = Trainer(
+# model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
+# trainer.train()
+
+# ###SAVE THE UPDATED LM SEPERATELY###
+
+# trained_lm = BertModel.from_pretrained("./models/singletask_model_language/checkpoint-1000")
+# trained_lm.save_pretrained("./models/singletask_model_language/lm")
 
 ####TRAINING LOOP 2 : EMOTION####
 
-model = BertForSequenceClassification.from_pretrained("./models/singletask_model_language", num_labels=label_map["emotion"])
+task = "emotion"
+model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
 for name, param in model.named_parameters():
 	if 'classifier' not in name: # classifier layer
 		param.requires_grad = False
-training_args = TrainingArguments(evaluation_strategy="epoch", output_dir="./models/singletask_model_{}".format("emotion"),
+training_args = TrainingArguments(output_dir="./models/singletask_model_{}".format(task),
     overwrite_output_dir=True,
-    learning_rate=1e-5,
+    learning_rate=1e-4,
     do_train=True,
-    num_train_epochs=5,
+    num_train_epochs=15,
     per_device_train_batch_size=32,  
-    evaluation_strategy =‘steps’,
-    eval_steps = 500, # Evaluation and Save happens every 10 steps
-    save_total_limit = 3, # Only last 5 models are saved. Older ones are deleted.
-    load_best_model_at_end=True)
+    evaluation_strategy = 'epoch')
 trainer = Trainer(
 model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
 trainer.train()
