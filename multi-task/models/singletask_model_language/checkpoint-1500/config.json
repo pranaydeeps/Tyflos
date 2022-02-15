@@ -1,5 +1,5 @@
 {
-  "_name_or_path": "bert-base-multilingual-uncased",
+  "_name_or_path": "./models/singletask_tokenmodel_pos/lm",
   "architectures": [
     "BertForSequenceClassification"
   ],

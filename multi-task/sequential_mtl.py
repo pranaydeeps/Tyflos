@@ -166,32 +166,32 @@ def compute_metrics_token(p):
 
 ####TRAINING LOOP 1 : LANGUAGE IDENTIFICATION####
 
-# task = "language"
-# model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
+# task = "pos"
+# model = RevGradBertForTokenClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
 # training_args = TrainingArguments(output_dir="./models/singletask_model2_{}".format(task),
 #     overwrite_output_dir=True,
 #     learning_rate=1e-4,
 #     do_train=True,
-#     num_train_epochs=3,
+#     num_train_epochs=5,
 #     per_device_train_batch_size=32,  
-#     evaluation_strategy = 'steps',
+#     evaluation_strategy = 'epoch',
 #     eval_steps = 500, # Evaluation and Save happens every X steps
 #     save_total_limit = 3)
 # trainer = Trainer(
 # model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
 # trainer.train()
 
-###SAVE THE UPDATED LM SEPERATELY###
+##SAVE THE UPDATED LM SEPERATELY###
 
-# trained_lm = BertModel.from_pretrained("./models/singletask_model2_language/checkpoint-500")
-# trained_lm.save_pretrained("./models/singletask_model2_language/lm")
+# trained_lm = BertModel.from_pretrained("./models/singletask_model2_pos/checkpoint-1000")
+# trained_lm.save_pretrained("./models/singletask_model2_pos/lm")
 
 ####TRAINING LOOP 2 : SECONDARY TASK####
 
-task = "pos"
+task = "language"
 # from transformers import DataCollatorForTokenClassification
 # data_collator = DataCollatorForTokenClassification(tokenizer, padding=True, max_length=max_length)
-model = BertForTokenClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
+model = BertForSequenceClassification.from_pretrained("./models/singletask_tokenmodel_pos/lm", num_labels=label_map[task])
 
 #Freezing everything except classifier layer!
 for name, param in model.named_parameters():
@@ -202,10 +202,10 @@ training_args = TrainingArguments(output_dir="./models/singletask_model_{}".form
     overwrite_output_dir=True,
     learning_rate=1e-4,
     do_train=True,
-    num_train_epochs=15,
+    num_train_epochs=5,
     per_device_train_batch_size=32,  
     evaluation_strategy = 'epoch')
 trainer = Trainer(
 model=model, args=training_args, 
-train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics_token)
+train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
 trainer.train()

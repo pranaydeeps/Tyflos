@@ -1,5 +1,5 @@
 {
-  "_name_or_path": "./models/singletask_model_language/lm",
+  "_name_or_path": "./models/singletask_tokenmodel_language/lm",
   "architectures": [
     "BertForTokenClassification"
   ],
@@ -64,7 +64,6 @@
   "pooler_size_per_head": 128,
   "pooler_type": "first_token_transform",
   "position_embedding_type": "absolute",
-  "problem_type": "single_label_classification",
   "torch_dtype": "float32",
   "transformers_version": "4.10.3",
   "type_vocab_size": 2,

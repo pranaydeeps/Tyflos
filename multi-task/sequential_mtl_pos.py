@@ -6,30 +6,25 @@ import transformers
 import nlp
 import logging
 from datasets import load_dataset
-from grad_reversal_bert import RevGradBert
+from grad_reversal_bert import RevGradBert, RevGradBertForTokenClassification
 
 
 logging.basicConfig(level=logging.INFO)
 
 
 model_name = "bert-base-multilingual-uncased"
-task_list = ["language","emotion","pos"]
-label_map = {"emotion" : 5, "language" : 7, "pos": 18}
+task_list = ["language","pos"]
+label_map = { "language" : 7, "pos": 18}
 
 
 dataset_dict = {
-    "emotion" : load_dataset('csv',data_files={'train' : '../datasets/universal_joy/small.csv',
-    'test' : '../datasets/universal_joy/test.csv'}),
-    "language" : load_dataset('csv',data_files={'train' : '../datasets/common_crawl/language_identification_train.csv',
-    'test' : '../datasets/common_crawl/language_identification_test.csv'}),
+    # "language" : load_dataset('language_dataset_loader.py',data_files={'train' : '../datasets/common_crawl/language_identification_train.conllu',
+    # 'test' : '../datasets/common_crawl/language_identification_test.conllu'}),
+    "language": load_dataset('csv', data_files={'train': '../datasets/common_crawl/language_identification_train.csv',
+    'test' : '../datasets/common_crawl/language_identification_test.csv'})
     "pos" : load_dataset('pos_dataset_loader.py',data_files={'train' : '../datasets/final_pos_data/train.conllu', 
     'test' : '../datasets/final_pos_data/test.conllu'})
 }
-emotion_to_int = {'anger' : 0,'anticipation' : 1 ,'fear' : 2,'joy' : 3,'sadness' : 4}
-language_to_int = {'en' : 0,'es' : 1,'nl' : 2,'pt' : 3,'zh' : 4,'tl' : 5,'hi' : 6}
-
-dataset_dict["emotion"] = dataset_dict["emotion"].map(lambda example: {"emotion": emotion_to_int[example['emotion']]})
-dataset_dict["language"] = dataset_dict["language"].map(lambda example: {"language": language_to_int[example['language']]})
 
 import transformers
 from transformers import BertTokenizerFast, BertForSequenceClassification, BertForTokenClassification
@@ -38,21 +33,24 @@ from transformers import BertTokenizerFast, BertForSequenceClassification, BertF
 max_length = 128
 tokenizer = BertTokenizerFast.from_pretrained(model_name)
 
-def convert_to_emotion_features(example_batch):
-    inputs = list(example_batch['text'])
-    features = tokenizer.batch_encode_plus(
-        inputs, max_length=max_length, pad_to_max_length=True
-    )
-    features["labels"] = example_batch["emotion"]
-    return features
-
 def convert_to_language_features(example_batch):
-    inputs = list(example_batch['text'])
-    features = tokenizer.batch_encode_plus(
-        inputs, max_length=max_length, pad_to_max_length=True
-    )
-    features["labels"] = example_batch["language"]
-    return features
+    inputs = example_batch["tokens"]
+    tokenized_inputs = tokenizer(inputs, max_length=max_length, pad_to_max_length=True, is_split_into_words=True)
+    labels = []
+    for i, label in enumerate(example_batch[f"label"]):
+        word_ids = tokenized_inputs.word_ids(batch_index=i)  # Map tokens to their respective word.
+        previous_word_idx = None
+        label_ids = []
+        for word_idx in word_ids:                            # Set the special tokens to -100.
+            if word_idx is None:
+                label_ids.append(-100)
+            elif word_idx != previous_word_idx:              # Only label the first token of a given word.
+                label_ids.append(label[word_idx])
+
+        labels.append(label_ids)
+
+    tokenized_inputs["labels"] = labels
+    return tokenized_inputs    
 
 def convert_to_pos_features(example_batch):
     inputs = example_batch["tokens"]
@@ -75,15 +73,13 @@ def convert_to_pos_features(example_batch):
 
 convert_func_dict = {
     "language": convert_to_language_features,
-    "emotion": convert_to_emotion_features,
     "pos": convert_to_pos_features
 }
 
 
 columns_dict = {
-    "emotion": ['input_ids', 'attention_mask', 'labels'],
     "language": ['input_ids', 'attention_mask', 'labels'],
-      "pos": ['input_ids', 'attention_mask', 'labels']
+    "pos": ['input_ids', 'attention_mask', 'labels']
 }
 
 
@@ -166,34 +162,30 @@ def compute_metrics_token(p):
 
 ####TRAINING LOOP 1 : LANGUAGE IDENTIFICATION####
 
-# task = "language"
-# model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
-# training_args = TrainingArguments(output_dir="./models/singletask_model2_{}".format(task),
-#     overwrite_output_dir=True,
-#     learning_rate=1e-4,
-#     do_train=True,
-#     num_train_epochs=3,
-#     per_device_train_batch_size=32,  
-#     evaluation_strategy = 'steps',
-#     eval_steps = 500, # Evaluation and Save happens every X steps
-#     save_total_limit = 3)
-# trainer = Trainer(
-# model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
-# trainer.train()
+task = "pos"
+model = RevGradBertForTokenClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
+training_args = TrainingArguments(output_dir="./models/singletask_tokenmodel_{}".format(task),
+    overwrite_output_dir=True,
+    learning_rate=1e-4,
+    do_train=True,
+    num_train_epochs=5,
+    per_device_train_batch_size=32,  
+    evaluation_strategy = 'epoch')
+trainer = Trainer(
+model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics_token)
+trainer.train()
 
-###SAVE THE UPDATED LM SEPERATELY###
+# ###SAVE THE UPDATED LM SEPERATELY###
 
-# trained_lm = BertModel.from_pretrained("./models/singletask_model2_language/checkpoint-500")
-# trained_lm.save_pretrained("./models/singletask_model2_language/lm")
+trained_lm = BertModel.from_pretrained("./models/singletask_tokenmodel_pos/checkpoint-1000")
+trained_lm.save_pretrained("./models/singletask_tokenmodel_pos/lm")
 
 ####TRAINING LOOP 2 : SECONDARY TASK####
 
-task = "pos"
-# from transformers import DataCollatorForTokenClassification
-# data_collator = DataCollatorForTokenClassification(tokenizer, padding=True, max_length=max_length)
-model = BertForTokenClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
+task = "language"
+model = BertForSequenceClassification.from_pretrained("./models/singletask_tokenmodel_pos/lm", num_labels=label_map[task])
 
-#Freezing everything except classifier layer!
+# Freezing everything except classifier layer!
 for name, param in model.named_parameters():
 	if 'classifier' not in name: 
 		param.requires_grad = False
@@ -202,7 +194,7 @@ training_args = TrainingArguments(output_dir="./models/singletask_model_{}".form
     overwrite_output_dir=True,
     learning_rate=1e-4,
     do_train=True,
-    num_train_epochs=15,
+    num_train_epochs=5,
     per_device_train_batch_size=32,  
     evaluation_strategy = 'epoch')
 trainer = Trainer(
