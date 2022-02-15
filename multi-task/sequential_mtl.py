@@ -13,8 +13,8 @@ logging.basicConfig(level=logging.INFO)
 
 
 model_name = "bert-base-multilingual-uncased"
-task_list = ["language","emotion","pos"]
-label_map = {"emotion" : 5, "language" : 7, "pos": 18}
+task_list = ["language","emotion","pos","nli"]
+label_map = {"emotion" : 5, "language" : 7, "pos": 18, "nli": 3}
 
 
 dataset_dict = {
@@ -23,19 +23,23 @@ dataset_dict = {
     "language" : load_dataset('csv',data_files={'train' : '../datasets/common_crawl/language_identification_train.csv',
     'test' : '../datasets/common_crawl/language_identification_test.csv'}),
     "pos" : load_dataset('pos_dataset_loader.py',data_files={'train' : '../datasets/final_pos_data/train.conllu', 
-    'test' : '../datasets/final_pos_data/test.conllu'})
+    'test' : '../datasets/final_pos_data/test.conllu'}),
+    "nli" : load_dataset('csv',data_files={'train' : '../datasets/nli_train2.csv',
+    'test' : '../datasets/nli_test2.csv'})
 }
 emotion_to_int = {'anger' : 0,'anticipation' : 1 ,'fear' : 2,'joy' : 3,'sadness' : 4}
 language_to_int = {'en' : 0,'es' : 1,'nl' : 2,'pt' : 3,'zh' : 4,'tl' : 5,'hi' : 6}
+nli_to_int = {'entailment' : 0, 'contradiction' : 1, 'neutral' : 2}
 
 dataset_dict["emotion"] = dataset_dict["emotion"].map(lambda example: {"emotion": emotion_to_int[example['emotion']]})
 dataset_dict["language"] = dataset_dict["language"].map(lambda example: {"language": language_to_int[example['language']]})
+dataset_dict["nli"] = dataset_dict["nli"].map(lambda example: {"label": nli_to_int[example['label']]})
 
 import transformers
 from transformers import BertTokenizerFast, BertForSequenceClassification, BertForTokenClassification
 
 
-max_length = 128
+max_length = 512
 tokenizer = BertTokenizerFast.from_pretrained(model_name)
 
 def convert_to_emotion_features(example_batch):
@@ -52,6 +56,20 @@ def convert_to_language_features(example_batch):
         inputs, max_length=max_length, pad_to_max_length=True
     )
     features["labels"] = example_batch["language"]
+    return features
+
+def convert_to_nli_features(example_batch):
+    inputs = []
+    for i in range(0, len(example_batch["label"])):
+        try:
+            inputs.append(example_batch['premise'][i] + ' [SEP] ' + example_batch['hypothesis'][i])
+        except:
+            print(example_batch['premise'][i])
+            print(example_batch['hypothesis'][i])
+    features = tokenizer.batch_encode_plus(
+        inputs, max_length=max_length, pad_to_max_length=True)
+    # print(features)
+    features["labels"] = example_batch["label"]
     return features
 
 def convert_to_pos_features(example_batch):
@@ -76,14 +94,16 @@ def convert_to_pos_features(example_batch):
 convert_func_dict = {
     "language": convert_to_language_features,
     "emotion": convert_to_emotion_features,
-    "pos": convert_to_pos_features
+    "pos": convert_to_pos_features,
+    "nli": convert_to_nli_features
 }
 
 
 columns_dict = {
     "emotion": ['input_ids', 'attention_mask', 'labels'],
     "language": ['input_ids', 'attention_mask', 'labels'],
-      "pos": ['input_ids', 'attention_mask', 'labels']
+    "pos": ['input_ids', 'attention_mask', 'labels'],
+    "nli": ['input_ids', 'attention_mask', 'labels']
 }
 
 
@@ -132,11 +152,24 @@ from transformers.file_utils import (
 metric = load_metric("accuracy")
 seqeval_metric = load_metric("seqeval")
 
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    predictions = np.argmax(logits, axis=-1)
-    return metric.compute(predictions=predictions, references=labels)
+# def compute_metrics(eval_pred):
+#     logits, labels = eval_pred
+#     predictions = np.argmax(logits, axis=-1)
+#     return metric.compute(predictions=predictions, references=labels)
 
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score
+
+def compute_metrics(pred):
+    labels = pred.label_ids
+    preds = pred.predictions.argmax(-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, preds)
+    acc = accuracy_score(labels, preds)
+    return {
+        'accuracy': acc,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall
+    }
 
 label_list = dataset_dict["pos"]["train"].features[f"upos"].feature.names
 def compute_metrics_token(p):
@@ -166,11 +199,11 @@ def compute_metrics_token(p):
 
 ####TRAINING LOOP 1 : LANGUAGE IDENTIFICATION####
 
-# task = "pos"
-# model = RevGradBertForTokenClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
-# training_args = TrainingArguments(output_dir="./models/singletask_model2_{}".format(task),
+# task = "language"
+# model = RevGradBert.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
+# training_args = TrainingArguments(output_dir="./models/singletask_model_{}".format(task),
 #     overwrite_output_dir=True,
-#     learning_rate=1e-4,
+#     learning_rate=1e-5,
 #     do_train=True,
 #     num_train_epochs=5,
 #     per_device_train_batch_size=32,  
@@ -181,17 +214,17 @@ def compute_metrics_token(p):
 # model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
 # trainer.train()
 
-##SAVE THE UPDATED LM SEPERATELY###
+###SAVE THE UPDATED LM SEPERATELY###
 
-# trained_lm = BertModel.from_pretrained("./models/singletask_model2_pos/checkpoint-1000")
-# trained_lm.save_pretrained("./models/singletask_model2_pos/lm")
+# trained_lm = BertModel.from_pretrained("./models/singletask_model_language/checkpoint-1000")
+# trained_lm.save_pretrained("./models/singletask_model_language/lm")
 
 ####TRAINING LOOP 2 : SECONDARY TASK####
 
-task = "language"
+task = "nli"
 # from transformers import DataCollatorForTokenClassification
 # data_collator = DataCollatorForTokenClassification(tokenizer, padding=True, max_length=max_length)
-model = BertForSequenceClassification.from_pretrained("./models/singletask_tokenmodel_pos/lm", num_labels=label_map[task])
+model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
 
 #Freezing everything except classifier layer!
 for name, param in model.named_parameters():
@@ -202,8 +235,8 @@ training_args = TrainingArguments(output_dir="./models/singletask_model_{}".form
     overwrite_output_dir=True,
     learning_rate=1e-4,
     do_train=True,
-    num_train_epochs=5,
-    per_device_train_batch_size=32,  
+    num_train_epochs=10,
+    per_device_train_batch_size=16,  
     evaluation_strategy = 'epoch')
 trainer = Trainer(
 model=model, args=training_args, 

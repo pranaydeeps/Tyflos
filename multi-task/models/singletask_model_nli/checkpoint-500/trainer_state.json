@@ -1,22 +1,22 @@
 {
   "best_metric": null,
   "best_model_checkpoint": null,
-  "epoch": 0.8460236886632826,
+  "epoch": 0.8880994671403197,
   "global_step": 500,
   "is_hyper_param_search": false,
   "is_local_process_zero": true,
   "is_world_process_zero": true,
   "log_history": [
     {
-      "epoch": 0.85,
-      "learning_rate": 8.307952622673436e-05,
-      "loss": 1.9488,
+      "epoch": 0.89,
+      "learning_rate": 9.111900532859681e-05,
+      "loss": 1.0999,
       "step": 500
     }
   ],
-  "max_steps": 2955,
-  "num_train_epochs": 5,
-  "total_flos": 2104982937600000.0,
+  "max_steps": 5630,
+  "num_train_epochs": 10,
+  "total_flos": 2104907341824000.0,
   "trial_name": null,
   "trial_params": null
 }

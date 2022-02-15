@@ -1,5 +1,5 @@
 {
-  "_name_or_path": "./models/singletask_tokenmodel_pos/lm",
+  "_name_or_path": "./models/singletask_model_nli/lm",
   "architectures": [
     "BertForSequenceClassification"
   ],
