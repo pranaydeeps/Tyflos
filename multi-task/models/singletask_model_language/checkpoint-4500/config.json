@@ -1,7 +1,7 @@
 {
-  "_name_or_path": "./models/singletask_model_nli/lm",
+  "_name_or_path": "bert-base-multilingual-uncased",
   "architectures": [
-    "BertForSequenceClassification"
+    "RevGradBert"
   ],
   "attention_probs_dropout_prob": 0.1,
   "classifier_dropout": null,

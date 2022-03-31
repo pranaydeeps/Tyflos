@@ -197,16 +197,16 @@ def compute_metrics_token(p):
 #Use RevGradBert() instead of BertForSequenceClassification()
 #For Gradient Reversal training for a particular task
 
-####TRAINING LOOP 1 : LANGUAGE IDENTIFICATION####
+###TRAINING LOOP 1 : LANGUAGE IDENTIFICATION####
 
 # task = "language"
 # model = RevGradBert.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
 # training_args = TrainingArguments(output_dir="./models/singletask_model_{}".format(task),
 #     overwrite_output_dir=True,
-#     learning_rate=1e-5,
+#     learning_rate=1e-4,
 #     do_train=True,
 #     num_train_epochs=5,
-#     per_device_train_batch_size=32,  
+#     per_device_train_batch_size=8,  
 #     evaluation_strategy = 'epoch',
 #     eval_steps = 500, # Evaluation and Save happens every X steps
 #     save_total_limit = 3)
@@ -214,17 +214,17 @@ def compute_metrics_token(p):
 # model=model, args=training_args, train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)
 # trainer.train()
 
-###SAVE THE UPDATED LM SEPERATELY###
+##SAVE THE UPDATED LM SEPERATELY###
 
-# trained_lm = BertModel.from_pretrained("./models/singletask_model_language/checkpoint-1000")
-# trained_lm.save_pretrained("./models/singletask_model_language/lm")
+trained_lm = BertModel.from_pretrained("./models/singletask_model_language/checkpoint-4000")
+trained_lm.save_pretrained("./models/singletask_model_language/lm")
 
 ####TRAINING LOOP 2 : SECONDARY TASK####
 
 task = "nli"
 # from transformers import DataCollatorForTokenClassification
 # data_collator = DataCollatorForTokenClassification(tokenizer, padding=True, max_length=max_length)
-model = BertForSequenceClassification.from_pretrained("bert-base-multilingual-uncased", num_labels=label_map[task])
+model = BertForSequenceClassification.from_pretrained("./models/singletask_model_language/lm", num_labels=label_map[task])
 
 #Freezing everything except classifier layer!
 for name, param in model.named_parameters():
@@ -236,8 +236,9 @@ training_args = TrainingArguments(output_dir="./models/singletask_model_{}".form
     learning_rate=1e-4,
     do_train=True,
     num_train_epochs=10,
-    per_device_train_batch_size=16,  
-    evaluation_strategy = 'epoch')
+    per_device_train_batch_size=8,  
+    evaluation_strategy = 'epoch',
+    save_strategy='no')
 trainer = Trainer(
 model=model, args=training_args, 
 train_dataset=features_dict[task]["train"], eval_dataset=features_dict[task]["test"],compute_metrics=compute_metrics)

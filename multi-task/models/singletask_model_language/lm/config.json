@@ -1,5 +1,5 @@
 {
-  "_name_or_path": "./models/singletask_model_language/checkpoint-1000",
+  "_name_or_path": "./models/singletask_model_language/checkpoint-4000",
   "architectures": [
     "BertModel"
   ],
